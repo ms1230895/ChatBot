@@ -15,8 +15,6 @@ model = ChatOllama(
     model="llama3.1:latest",
     temperature=0,
 )
-
-
 # -----------------------------
 # State
 # -----------------------------
