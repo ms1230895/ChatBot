@@ -2,7 +2,7 @@
 
 A multi-utility chatbot built with **LangGraph**, **LangChain** and **Streamlit**, running on a local **Ollama** model (`llama3.1`).
 
-The project is built up in stages. Each stage adds a feature on top of the previous one: streaming, conversation sidebar, SQLite persistence, tool calling, MCP servers and RAG over PDFs.
+The project is built up in stages. Each stage adds a feature on top of the previous one: streaming, conversation sidebar, SQLite persistence, tool calling, MCP servers, RAG over PDFs and human-in-the-loop (HITL) approval.
 
 ## Features
 
@@ -16,6 +16,7 @@ The project is built up in stages. Each stage adds a feature on top of the previ
   - Stock price lookup (Alpha Vantage `GLOBAL_QUOTE`)
 - **MCP integration** – loads extra tools from MCP servers via `langchain-mcp-adapters` (stdio and streamable HTTP).
 - **RAG over PDFs** – upload a PDF per chat; it is chunked, embedded with `nomic-embed-text` and indexed in FAISS. The agent answers questions about it through a `rag_tool`.
+- **Human-in-the-loop (HITL)** – sensitive tool calls (a mock `purchase_stock`) pause the graph with LangGraph's `interrupt()` and wait for a human "yes" before going ahead. The graph resumes with `Command(resume=...)`.
 
 ## Architecture
 
@@ -42,11 +43,14 @@ The graph is `START → chat_node`. If the LLM requests a tool, `tools_condition
 | 5. Tools | `langgraph_tools_backend.py` | `streamlit_frontend_tool.py` | Search, calculator, stock price tools with live tool status |
 | 6. MCP | `langgraph_mcp_backend.py` | `streamlit-frontend-mcp.py` | Async graph + MCP server tools |
 | 7. RAG | `langgraph_backend_Rag.py` | `Streamlit-frontend-Rag.py` | PDF upload, FAISS retriever, all tools combined |
+| 8a. Without HITL | `Chatbot_without_HITL.py` | CLI | Stock bot that buys shares with no approval step |
+| 8b. With HITL | `Chatbot_with_hitl.py` | CLI | Same bot, but `purchase_stock` asks a human to approve first |
 
 ## Prerequisites
 
 - Python 3.10+ (developed on 3.13)
 - [Ollama](https://ollama.com) installed and running
+- An OpenAI API key, only for the HITL stage (it uses `ChatOpenAI`)
 - The models used by the project:
 
 ```bash
@@ -69,7 +73,11 @@ pip install streamlit langgraph langgraph-checkpoint-sqlite langchain-core \
     requests python-dotenv
 ```
 
-Optional: create a `.env` file for environment variables (it is git-ignored). The backends load it with `python-dotenv`.
+Create a `.env` file for environment variables (it is git-ignored). The backends load it with `python-dotenv`. The HITL stage needs:
+
+```bash
+OPENAI_API_KEY=your-key-here
+```
 
 ## Usage
 
@@ -89,6 +97,15 @@ streamlit run streamlit-frontend-mcp.py        # chat + MCP tools
 
 Then open the URL Streamlit prints (default http://localhost:8501).
 
+The HITL stage runs in the terminal:
+
+```bash
+python Chatbot_without_HITL.py   # buys straight away
+python Chatbot_with_hitl.py      # asks for approval first
+```
+
+Type `exit` or `quit` to stop.
+
 ### Using the RAG chatbot
 
 1. Click **New Chat** (or use the current thread).
@@ -97,9 +114,20 @@ Then open the URL Streamlit prints (default http://localhost:8501).
 
 > The PDF index is kept in memory per thread. It is lost when the app restarts, while the chat history stays in `chatbot.db`.
 
+### Using the HITL chatbot
+
+```
+You: Buy 10 shares of AAPL
+HITL: Approve buying 10 shares of AAPL? (yes/no)
+Your decision: yes
+Bot: Purchase order placed for 10 shares of AAPL.
+```
+
+Any answer other than `yes` cancels the purchase. `purchase_stock` is a mock: no real brokerage API is called. Both HITL scripts use an in-memory `MemorySaver`, so history is lost on exit.
+
 ## Configuration notes
 
-- **Model** – change `model="llama3.1:latest"` in the backend files to use another Ollama model. The model must support tool calling for stages 5–7.
+- **Model** – change `model="llama3.1:latest"` in the backend files to use another Ollama model. The model must support tool calling for stages 5–7. The HITL scripts use `ChatOpenAI()` with its default model.
 - **Stock tool** – uses an Alpha Vantage API key. Get a free key at https://www.alphavantage.co and set it in the `get_stock_price` tool.
 - **MCP servers** – edit the `MultiServerMCPClient` config in `langgraph_mcp_backend.py`. Point the `arith` server `args` to the path of your own MCP server script. If no MCP server can be reached, the app still starts with the built-in tools.
 - **Imports in stages 1–3** – `streamlit_frontend.py`, `streamlit_frontend_streaming.py` and `streamlit_frontend_Resume.py` import `Chatbot.langgraph_backend`. If you get a `ModuleNotFoundError`, change the import to `from langgraph_backend import chatbot`.
@@ -109,6 +137,7 @@ Then open the URL Streamlit prints (default http://localhost:8501).
 - [LangGraph](https://github.com/langchain-ai/langgraph) – agent graph, checkpointing
 - [LangChain](https://github.com/langchain-ai/langchain) – LLM, tools, loaders, vector store
 - [Ollama](https://ollama.com) – local LLM and embeddings
+- [OpenAI](https://platform.openai.com) – LLM for the HITL stage
 - [Streamlit](https://streamlit.io) – chat UI
 - [FAISS](https://github.com/facebookresearch/faiss) – vector search
 - SQLite – conversation persistence
