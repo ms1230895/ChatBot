@@ -2,6 +2,9 @@ import streamlit as st
 from langchain_core.messages import HumanMessage
 from langgraph_backend_database import chatbot, retrieve_all_threads
 import uuid
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # **************************************** utility functions *************************
 
