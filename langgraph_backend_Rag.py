@@ -26,8 +26,8 @@ load_dotenv()
 # 1. LLM + embeddings
 # -------------------
 llm = ChatOllama(
-    model="llama3.1:latest",
-    temperature=0,
+    model="gpt-oss:120b-cloud",
+    temperature=0.3,
 )
 embeddings = OllamaEmbeddings(
         model="nomic-embed-text:latest"
